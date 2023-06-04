@@ -1,98 +1,86 @@
-"""
-Heart rate monitor
-------------------
-The program relies on the user to press the space bar and displays the measured heart rate.
-"""
+from time import monotonic
+from textual import events
+from textual._types import WatchCallbackType
 
-import keyboard
-import os
-import numpy as np
-import curses # for terminal display
+from textual.app import App, ComposeResult
+from textual.containers import ScrollableContainer
+from textual.dom import DOMNode
+from textual.reactive import reactive
+from textual.widget import Widget
+from textual.widgets import Button, Header, Footer, Static, Label
 
-from computation import HeartRateComputation
-
-class HeartRateDisplay:
-    """Display the heart rate as a graph in the terminal."""
-
-    def __init__(self):
-        self._heart_rate = 0
-        self.terminal_width = os.get_terminal_size().columns
-        self.terminal_height = os.get_terminal_size().lines
-
-    def set_heart_rate(self, heart_rate):
-        """Set the heart rate."""
-        self._heart_rate = heart_rate
-
-    def get_rate_line(self, label: str, rate: float) -> str:
-        """Get the line to display the heart rate."""
-        
-        # display the heart rate as a graph
-        # the heart rate is displayed as a number of asterisks
-        # the heart rate is rounded to the nearest integer
-        
-        
-        label = "Average rate"
-        rate = self._heart_rate
-
-        print_line = ""
-        # show heart rate
-        print_line += label + ":"
-        number_spaces = 3 - int(np.log10(rate))  if rate != 0 else 3
-        print_line += " " * number_spaces
-        print_line += f"{round(rate)} bpm "
-
-        # show bar
-        bar_area = self.terminal_width - len(label) - 13 
-        bar_width = min(round(rate), bar_area)
-        white_space_width = bar_area - bar_width
-        print_line += "["
-        print_line += "*" * bar_width 
-        print_line += " " * white_space_width
-        print_line += "] "
-
-        return print_line
+class RateDisplay(Static):
     
-    def display(self):
-        """Display the heart rate."""
-        # clear the screen
-        # initialize curses
-        stdscr = curses.initscr()
+    count = reactive(0)
+    times = []
 
-        # clear the screen
-        stdscr.clear()
+    def _on_mount(self) -> None:
+        """Event handler when the widget is added."""
+        self.update("Current: 0\nAverage: 0")
 
-        # display the heart rate
-        print(self.get_rate_line("Current rate", self._heart_rate))
-        print(self.get_rate_line("Average rate", self._heart_rate))
+    def add_press(self) -> None:
+        self.count += 1
+        self.times.append(monotonic())
+        current_rate = 60 / (self.times[-1] - self.times[-2]) if len(self.times) > 1 else 0
+        average_rate = sum([60 / (self.times[i] - self.times[i-1]) for i in range(1, len(self.times))]) / (len(self.times) - 1) if len(self.times) > 1 else 0 
+        self.update(f"Current: {round(current_rate)} bpm \nAverage: {round(average_rate)} bpm")
 
-        # refresh the screen
-        
-        # end curses
-        curses.endwin()
+    def reset(self) -> None:
+        self.count = 0
+        self.times = []
+        self.update("Current: 0 bpm\nAverage: 0 bpm")
 
+class HeartRateMonitor(Static):
 
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Event handler when button is pressed."""
+        id = event.button.id
+        counter = self.query_one(RateDisplay)
 
+        if id == "beat":
+            counter.add_press()
+            self.add_class("started")
+        elif id == "reset":
+            counter.reset()
+            self.remove_class("started")
 
-
-        
-
-def main():
-    """Main function"""
-    computer = HeartRateComputation()
-    display = HeartRateDisplay()
-
+    def compose(self) -> ComposeResult:
+        """Create child widgets."""
+        yield Button("Beat", id="beat", variant="default")
+        yield Button("Reset", id="reset", variant="error")
+        yield RateDisplay()
 
     
-    keyboard.add_hotkey("space", computer.step)
-    while True:
-        # continually update the screen with the heart rate and average heart rate
-        # every 0.1 seconds
-        # update the screen in the same line and overwrite the previous line
-        display.set_heart_rate(computer.get_heart_rate())
-        display.display()
+    def on_key(self, event: events.Key) -> None:
+        """Called when the user presses a key."""
+
+        key = event.key
+        if key == "space":
+            counter = self.query_one(RateDisplay)
+            counter.add_press()
+            self.add_class("started")
+        elif key == "r":
+            counter = self.query_one(RateDisplay)
+            counter.reset()
+            self.remove_class("started")
 
 
+class HeartrateApp(App):
 
+    CSS_PATH = "monitor.css"
+    BINDINGS = [("d", "toggle_dark", "Toggle dark mode"),
+                ("q", "quit", "Quit")]
+
+    def compose(self) -> ComposeResult:
+        """Create child widget for the app."""
+        yield Header()
+        yield Footer()
+        yield ScrollableContainer(HeartRateMonitor())
+        
+    def action_toggle_dark(self) -> None:
+        """Toggle dark mode."""
+        self.dark = not self.dark
 
 if __name__ == "__main__":
-    main()
+    app = HeartrateApp()
+    app.run()

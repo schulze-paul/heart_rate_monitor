@@ -1,0 +1,42 @@
+HeartRateMonitor {
+    layout: horizontal;
+    background: $boost;
+    height: 5;
+    margin: 1;
+    min_width: 50;
+    padding: 1;
+}
+
+RateDisplay {
+    content-align: center middle;
+    text-opacity: 60%;
+    height: 3;
+}
+
+Button {
+    width: 16;
+}
+
+#start {
+    dock: left;
+}
+
+
+#reset {
+    dock: right;
+    visibility: hidden;
+}
+
+.started {
+    text-style: bold;
+    background: $success;
+    color: $text;
+}
+
+.started RateDisplay {
+    text-opacity: 100%;
+}
+
+.started #reset {
+    visibility: visible;
+}
